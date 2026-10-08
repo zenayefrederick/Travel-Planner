@@ -11,6 +11,6 @@
 // Leave both empty to keep trips only in this browser.
 
 window.TRAVEL_PLANNER_CONFIG = {
-  supabaseUrl: "",   // e.g. "https://abcdefghijklm.supabase.co"
-  supabaseKey: ""    // e.g. "sb_publishable_..." or the legacy anon key "eyJ..."
+  supabaseUrl: "https://iudqndzxhwcisxbftujt.supabase.co",
+  supabaseKey: "sb_publishable_wWHVwH71rR23XpGc3osYsw_fqJeVk2i"
 };
