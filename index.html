@@ -1,0 +1,1612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Travel Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=DM+Mono:wght@500&display=swap">
+<style>
+/* Layout: a dusk-sky band with a flight path, a boarding pass for the trip, then bookings on the left and a departures board + budget on the right. */
+:root {
+  --bg: #e7eef1;
+  --dot: #cdd9de;
+  --paper: #fffdf8;
+  --paper-2: #f3efe5;
+  --ink: #11233a;
+  --muted: #5d6f80;
+  --line: #d9d3c4;
+  --accent: #e2583a;
+  --accent-ink: #ffffff;
+  --ocean: #1c5a8a;
+  --sun: #f2b23c;
+  --board: #121a24;
+  --board-row: #1b2532;
+  --board-ink: #f6c344;
+  --sky-1: #12284a;
+  --sky-2: #3d4a7a;
+  --sky-3: #c96a5a;
+  --sky-4: #f2b467;
+  --todo: #c24a20;
+  --booked: #1c5a8a;
+  --paid: #23744a;
+  --spend: #6b4f99;
+  --danger: #b3261e;
+  --font-display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --font-body: "DM Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b141d; --dot: #17232f; --paper: #152230; --paper-2: #1c2b3b; --ink: #e9eff4; --muted: #93a4b4;
+    --line: #2b3c4e; --accent: #ff7b5c; --accent-ink: #1d0a04; --ocean: #7fb6e6; --sun: #f6c344;
+    --board: #070c12; --board-row: #111a24; --todo: #ff9a6e; --booked: #8cc0ee; --paid: #7fd6a3; --spend: #c4a8f0; --danger: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b141d; --dot: #17232f; --paper: #152230; --paper-2: #1c2b3b; --ink: #e9eff4; --muted: #93a4b4;
+  --line: #2b3c4e; --accent: #ff7b5c; --accent-ink: #1d0a04; --ocean: #7fb6e6; --sun: #f6c344;
+  --board: #070c12; --board-row: #111a24; --todo: #ff9a6e; --booked: #8cc0ee; --paid: #7fd6a3; --spend: #c4a8f0; --danger: #ff8a80;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--dot) 1.2px, transparent 1.3px);
+  background-size: 18px 18px;
+  color: var(--ink);
+  font: 15px/1.5 var(--font-body);
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-family: var(--font-mono); font-size: .7rem; text-transform: uppercase; letter-spacing: .14em; color: var(--muted); }
+
+/* Sky band */
+.sky {
+  position: relative;
+  background: linear-gradient(180deg, var(--sky-1) 0%, var(--sky-2) 45%, var(--sky-3) 80%, var(--sky-4) 100%);
+  color: #fff;
+  padding-inline: 16px;
+  padding-block: 14px 110px;
+  overflow: hidden;
+}
+.sky canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.sky-inner { position: relative; max-width: 1120px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+.brand { font-family: var(--font-display); font-weight: 900; font-size: 1.6rem; letter-spacing: .04em; text-transform: uppercase; display: flex; align-items: center; gap: 10px; margin-right: auto; }
+.brand svg { width: 26px; height: 26px; color: var(--sun); transform: rotate(45deg); }
+.sky select { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.35); color: #fff; border-radius: 99px; padding: 7px 14px; max-width: 220px; }
+.sky select option { color: #11233a; }
+.sky .path { position: absolute; left: 0; right: 0; bottom: 0; height: 120px; pointer-events: none; }
+
+.sync-btn { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.35); display: inline-flex; align-items: center; gap: 8px; }
+.sync-btn:hover { border-color: #fff; }
+.sync-btn::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #c9d3dc; }
+.sync-btn[data-state="synced"]::before, .sync-btn[data-state="idle"]::before { background: #7fd6a3; }
+.sync-btn[data-state="syncing"]::before, .sync-btn[data-state="connecting"]::before { background: var(--sun); }
+.sync-btn[data-state="error"]::before { background: #ff8a80; }
+.btn { border: 1.5px solid var(--line); background: var(--paper); border-radius: 99px; padding: 7px 16px; font-weight: 500; }
+.btn:hover { border-color: var(--ink); }
+.btn-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.btn-primary:hover { filter: brightness(1.06); border-color: var(--accent); }
+.btn-light { background: #fff; color: #11233a; border-color: #fff; font-weight: 700; }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.btn-ghost:hover { color: var(--ink); border-color: var(--line); }
+.btn-danger { color: var(--danger); }
+
+main { position: relative; max-width: 1120px; margin: -92px auto 0; padding-inline: 16px; padding-block: 0 56px; display: grid; gap: 22px; }
+
+.notice { background: var(--paper); border: 1.5px dashed var(--line); border-radius: 12px; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: .9rem; color: var(--muted); }
+.notice strong { color: var(--ink); }
+
+/* Boarding pass */
+.pass { display: grid; grid-template-columns: minmax(0, 1fr) 250px; background: var(--paper); border-radius: 18px; box-shadow: 0 18px 40px -18px rgba(10, 25, 45, .45); position: relative; }
+.pass-main { padding: 20px 24px 22px; display: grid; gap: 18px; min-width: 0; }
+.pass-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pass-head .airline { font-family: var(--font-display); font-weight: 900; text-transform: uppercase; letter-spacing: .08em; font-size: 1rem; color: var(--accent); }
+.route { display: grid; grid-template-columns: auto minmax(40px, 1fr) auto; align-items: center; gap: 14px; }
+.code { font-family: var(--font-display); font-weight: 900; font-size: clamp(2.8rem, 9vw, 4.6rem); line-height: .9; letter-spacing: .02em; }
+.city { font-size: .85rem; color: var(--muted); margin-top: 4px; max-width: 18ch; overflow-wrap: anywhere; }
+.route .to { text-align: right; }
+.route .to .city { margin-left: auto; }
+.flightline { position: relative; height: 24px; }
+.flightline::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 2px dashed var(--line); }
+.flightline svg { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; transform: translate(-50%, -50%) rotate(90deg); color: var(--ink); background: var(--paper); padding: 2px; }
+.fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 16px; }
+.fields .val { font-family: var(--font-mono); font-size: .98rem; overflow-wrap: anywhere; }
+.trip-name { font-family: var(--font-display); font-weight: 700; font-size: 1.5rem; text-transform: uppercase; letter-spacing: .03em; line-height: 1.1; text-wrap: balance; }
+
+.pass-stub { border-left: 2px dashed var(--line); padding: 20px 22px; display: grid; gap: 14px; align-content: start; position: relative; background: var(--paper-2); border-radius: 0 18px 18px 0; }
+.pass-stub::before, .pass-stub::after { content: ""; position: absolute; left: -13px; width: 24px; height: 24px; border-radius: 50%; background: var(--bg); }
+.pass-stub::before { top: -12px; }
+.pass-stub::after { bottom: -12px; }
+.countdown { font-family: var(--font-display); font-weight: 900; font-size: 3.6rem; line-height: .9; color: var(--accent); }
+.countdown small { font-size: 1.1rem; color: var(--ink); margin-left: 4px; }
+.barcode { height: 44px; background: repeating-linear-gradient(90deg, var(--ink) 0 2px, transparent 2px 4px, var(--ink) 4px 5px, transparent 5px 8px, var(--ink) 8px 11px, transparent 11px 12px); opacity: .85; border-radius: 2px; }
+
+/* Fare summary */
+.fare { background: var(--paper); border-radius: 16px; padding: 16px 20px 18px; display: grid; gap: 14px; border: 1.5px solid var(--line); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 20px; }
+.stat { display: grid; gap: 2px; }
+.stat .v { font-family: var(--font-mono); font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.stat .v.over { color: var(--danger); }
+.meter { height: 12px; background: var(--paper-2); border-radius: 99px; overflow: hidden; display: flex; }
+.meter i { display: block; height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: .82rem; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+
+/* Workspace */
+.work { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 22px; align-items: start; }
+.panel { background: var(--paper); border: 1.5px solid var(--line); border-radius: 16px; overflow: hidden; }
+.panel-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 14px 18px; }
+.panel h2 { font-family: var(--font-display); font-weight: 900; font-size: 1.45rem; text-transform: uppercase; letter-spacing: .03em; margin: 0; line-height: 1; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 18px 12px; border-bottom: 1.5px solid var(--line); }
+.chip { border: 1.5px solid var(--line); background: transparent; border-radius: 99px; padding: 3px 12px; font-size: .84rem; color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+.items { list-style: none; margin: 0; padding: 0; }
+.item { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto; gap: 4px 14px; align-items: center; padding: 14px 18px; border-bottom: 1.5px dashed var(--line); }
+.item:last-child { border-bottom: 0; }
+.icon { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--paper-2); color: var(--ocean); }
+.icon svg { width: 22px; height: 22px; }
+.item-title { font-weight: 700; overflow-wrap: anywhere; }
+.item-meta { font-size: .82rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.warn { color: var(--todo); font-weight: 700; }
+.warn.late { color: var(--danger); }
+.amt { text-align: right; font-size: 1rem; }
+.amt .sub { font-size: .74rem; color: var(--muted); font-family: var(--font-body); }
+.item-side { display: grid; gap: 6px; justify-items: end; }
+
+/* Passport-stamp status */
+.stamp {
+  font-family: var(--font-mono); font-size: .68rem; font-weight: 500; letter-spacing: .12em; text-transform: uppercase;
+  background: transparent; border: 2px solid currentColor; outline: 1px solid currentColor; outline-offset: 2px;
+  border-radius: 6px; padding: 3px 8px; transform: rotate(-4deg); white-space: nowrap;
+}
+.stamp:hover { transform: rotate(0deg) scale(1.04); }
+.stamp.todo { color: var(--todo); border-style: dashed; outline-color: transparent; }
+.stamp.booked { color: var(--booked); }
+.stamp.paid { color: var(--paid); transform: rotate(3deg); }
+.stamp.spend { color: var(--spend); border-style: dotted; outline-color: transparent; cursor: default; transform: none; }
+.empty { padding: 28px 18px; text-align: center; color: var(--muted); }
+
+.side { display: grid; gap: 22px; }
+/* Departures board */
+.board { background: var(--board); color: #e9eef3; border-radius: 16px; overflow: hidden; }
+.board .panel-head h2 { color: var(--board-ink); }
+.board .eyebrow { color: #8796a8; }
+.board-rows { list-style: none; margin: 0; padding: 0 10px 12px; display: grid; gap: 4px; }
+.board-rows li { background: var(--board-row); border-radius: 6px; padding: 8px 10px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; }
+.board-rows .what { font-family: var(--font-mono); font-size: .82rem; text-transform: uppercase; color: var(--board-ink); overflow-wrap: anywhere; }
+.board-rows .cat { font-size: .74rem; color: #8796a8; }
+.board-rows .when { font-family: var(--font-mono); font-size: .76rem; text-align: right; color: #e9eef3; }
+.board-rows .when.soon { color: #ffb26b; }
+.board-rows .when.late { color: #ff7a6b; animation: blink 1.4s steps(2, start) infinite; }
+.board .empty { color: #8796a8; }
+@keyframes blink { to { opacity: .35; } }
+
+.cats { padding: 4px 18px 18px; display: grid; gap: 12px; }
+.cat-row { display: grid; gap: 4px; }
+.cat-row .top { display: flex; justify-content: space-between; gap: 10px; font-size: .88rem; }
+.bar { height: 8px; background: var(--paper-2); border-radius: 99px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--ocean); border-radius: 99px; }
+.data-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 16px; }
+.hint { font-size: .8rem; color: var(--muted); }
+
+/* Find options */
+.finder .tabs { display: flex; gap: 4px; padding: 0 18px; border-bottom: 1.5px solid var(--line); overflow-x: auto; }
+.tab { border: 0; background: transparent; padding: 10px 14px; font-weight: 700; color: var(--muted); border-bottom: 3px solid transparent; margin-bottom: -1.5px; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+.tab svg { width: 18px; height: 18px; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.conn { font-family: var(--font-mono); font-size: .7rem; text-transform: uppercase; letter-spacing: .1em; padding: 4px 10px; border-radius: 99px; border: 1.5px solid var(--line); color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.conn::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.conn.on { color: var(--paid); border-color: currentColor; }
+.conn.on::before { background: var(--paid); }
+.finder-controls { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: end; padding: 14px 18px; background: var(--paper-2); }
+.finder-controls .field { min-width: 0; }
+.finder-controls .field input, .finder-controls .field select { width: 100%; border: 1.5px solid var(--line); background: var(--paper); border-radius: 10px; padding: 7px 10px; }
+.finder-controls .field input.f-code { width: 82px; }
+.finder-controls .field input.f-date { width: 150px; }
+.f-wide { flex: 1 1 180px; }
+.f-small { width: 90px; }
+.results { padding: 14px 18px 18px; display: grid; gap: 12px; }
+.results-note { font-size: .85rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; justify-content: space-between; }
+.sample-banner { background: color-mix(in srgb, var(--sun) 22%, var(--paper)); border: 1.5px dashed var(--sun); color: var(--ink); border-radius: 10px; padding: 8px 12px; font-size: .86rem; }
+.flight-row { display: grid; grid-template-columns: 36px minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 6px 16px; align-items: center; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 12px; }
+.flight-row img, .logo-ph { width: 32px; height: 32px; border-radius: 8px; object-fit: contain; background: var(--paper-2); display: grid; place-items: center; color: var(--ocean); }
+.logo-ph svg { width: 18px; height: 18px; }
+.times { font-family: var(--font-mono); font-size: 1.05rem; }
+.sub2 { font-size: .8rem; color: var(--muted); overflow-wrap: anywhere; }
+.price-col { text-align: right; display: grid; gap: 6px; justify-items: end; }
+.price { font-family: var(--font-display); font-weight: 900; font-size: 1.6rem; line-height: 1; }
+.price small { font-family: var(--font-body); font-weight: 500; font-size: .72rem; color: var(--muted); display: block; margin-top: 2px; }
+.tag-best { font-family: var(--font-mono); font-size: .64rem; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.card { border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; display: grid; grid-template-rows: auto 1fr; background: var(--paper); }
+.card-img { aspect-ratio: 16 / 9; max-width: 100%; background: linear-gradient(135deg, var(--paper-2), color-mix(in srgb, var(--ocean) 18%, var(--paper-2))); display: grid; place-items: center; color: var(--ocean); overflow: hidden; }
+.card-img img { width: 100%; height: 100%; object-fit: cover; }
+.card-img svg { width: 34px; height: 34px; opacity: .7; }
+.card-body { padding: 12px; display: grid; gap: 6px; align-content: start; }
+.card-name { font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.card-foot { display: flex; justify-content: space-between; align-items: end; gap: 8px; margin-top: auto; padding-top: 6px; flex-wrap: wrap; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn-sm { padding: 5px 12px; font-size: .82rem; }
+.btn-added { background: var(--paid); border-color: var(--paid); color: var(--paper); }
+a.btn { text-decoration: none; display: inline-block; }
+.spinner { width: 18px; height: 18px; border: 2.5px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: -4px; margin-right: 8px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: .9rem; }
+.steps code { font-family: var(--font-mono); font-size: .82rem; background: var(--paper-2); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .flight-row { grid-template-columns: 32px minmax(0, 1fr); }
+  .flight-row .price-col { grid-column: 1 / -1; grid-template-columns: 1fr auto; text-align: left; justify-items: start; align-items: center; }
+  .flight-row .mid { grid-column: 2; }
+  .finder-controls .field input.f-date { width: 140px; }
+}
+
+/* Modal */
+.overlay { position: fixed; inset: 0; background: rgba(8, 18, 32, .6); display: grid; place-items: center; padding: 16px; z-index: 10; }
+.modal { background: var(--paper); border-radius: 18px; width: min(560px, 100%); max-height: 92vh; overflow: auto; display: grid; }
+.modal-head { background: linear-gradient(120deg, var(--sky-1), var(--sky-2) 60%, var(--sky-3)); color: #fff; padding: 16px 20px; }
+.modal-head h3 { font-family: var(--font-display); font-weight: 900; font-size: 1.6rem; text-transform: uppercase; letter-spacing: .04em; margin: 0; line-height: 1; }
+.modal-body { padding: 18px 20px 20px; }
+.form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field.full { grid-column: 1 / -1; }
+.field label { font-family: var(--font-mono); font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+.field input, .field select, .field textarea { width: 100%; border: 1.5px solid var(--line); background: var(--bg); border-radius: 10px; padding: 8px 10px; }
+.field input.code-input { text-transform: uppercase; font-family: var(--font-mono); letter-spacing: .1em; }
+.field textarea { min-height: 70px; resize: vertical; }
+.modal-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.modal-actions .spacer { margin-right: auto; }
+.error { color: var(--danger); font-size: .88rem; margin: 0; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 9px 18px; border-radius: 99px; font-size: .9rem; z-index: 20; }
+
+@media (max-width: 880px) {
+  .work { grid-template-columns: minmax(0, 1fr); }
+  .pass { grid-template-columns: minmax(0, 1fr); }
+  .pass-stub { border-left: 0; border-top: 2px dashed var(--line); border-radius: 0 0 18px 18px; grid-template-columns: auto 1fr; align-items: end; }
+  .pass-stub::before, .pass-stub::after { top: -13px; bottom: auto; }
+  .pass-stub::before { left: -12px; }
+  .pass-stub::after { left: auto; right: -12px; }
+  .pass-stub .barcode { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) {
+  .fields, .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .item { grid-template-columns: 40px minmax(0, 1fr); }
+  .icon { width: 40px; height: 40px; }
+  .item-side { grid-column: 2; justify-items: start; grid-auto-flow: column; align-items: center; justify-content: start; gap: 12px; }
+  .amt { text-align: left; }
+  .form { grid-template-columns: 1fr; }
+  .pass-main { padding: 18px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+<style>body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+
+<header class="sky">
+  <canvas id="stars" aria-hidden="true"></canvas>
+  <svg class="path" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M -20 110 Q 600 -30 1220 70" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="2" stroke-dasharray="6 8" vector-effect="non-scaling-stroke"/>
+  </svg>
+  <div class="sky-inner">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>
+      Travel Planner
+    </div>
+    <select id="tripSelect" aria-label="Choose a trip"></select>
+    <button class="btn sync-btn" id="syncBtn" type="button" hidden></button>
+    <button class="btn btn-light" id="newTripBtn" type="button">+ New trip</button>
+  </div>
+</header>
+
+<main id="app"></main>
+<div id="modalRoot"></div>
+
+<script>
+(function () {
+  const STORE_KEY = "travel-planner-v1";
+
+  const ICONS = {
+    flight: '<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z" fill="currentColor"/>',
+    stay: '<path d="M3 18V7M3 14h18v4M21 14v-2a3 3 0 0 0-3-3h-7v5M7 11.5a1.5 1.5 0 1 0 0-.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    transport: '<path d="M6 3h12a2 2 0 0 1 2 2v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V5a2 2 0 0 1 2-2zM4 11h16M8 21l2-3M16 21l-2-3M8 14.5h.01M16 14.5h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    activity: '<path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4zM14 6v12" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-dasharray="0"/>',
+    insurance: '<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6zM9 12l2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    food: '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 1-3 3.5-3 7h3v11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    other: '<path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M4 7h16v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM9 11v6M15 11v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+  };
+  const CATEGORIES = [
+    { key: "flight", label: "Flights" },
+    { key: "stay", label: "Accommodation" },
+    { key: "transport", label: "Ground transport" },
+    { key: "activity", label: "Activities & tours" },
+    { key: "insurance", label: "Insurance & documents" },
+    { key: "food", label: "Food & spending money" },
+    { key: "other", label: "Other" }
+  ];
+  const STATUS = { todo: "To book", booked: "Booked", paid: "Paid", spend: "Spending budget" };
+  const CURRENCIES = ["CAD", "USD", "EUR", "GBP", "MXN", "JPY", "AUD", "CHF", "INR", "ETB"];
+
+  const uid = () => Math.random().toString(36).slice(2, 10);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const catLabel = (k) => (CATEGORIES.find((c) => c.key === k) || CATEGORIES[CATEGORIES.length - 1]).label;
+  const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k] || ICONS.other}</svg>`;
+
+  function codeFor(explicit, place) {
+    const e = String(explicit || "").replace(/[^a-z]/gi, "").toUpperCase();
+    if (e) return e.slice(0, 3);
+    const p = String(place || "").replace(/[^a-z]/gi, "").toUpperCase();
+    return p ? p.slice(0, 3) : "???";
+  }
+  function todayISO() {
+    const d = new Date();
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  }
+  function daysBetween(fromISO, toISO) {
+    const a = new Date(fromISO + "T00:00:00"), b = new Date(toISO + "T00:00:00");
+    return Math.round((b - a) / 86400000);
+  }
+  function fmtDate(iso, opts) {
+    if (!iso) return "";
+    const d = new Date(iso + "T00:00:00");
+    if (isNaN(d)) return iso;
+    return d.toLocaleDateString(undefined, opts || { month: "short", day: "numeric" });
+  }
+  function money(n, cur) {
+    const v = Number(n) || 0;
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: cur || "CAD", maximumFractionDigits: v % 1 === 0 ? 0 : 2 }).format(v);
+    } catch (e) { return (cur || "") + " " + v.toFixed(2); }
+  }
+
+  function sampleTrip() {
+    return {
+      id: uid(), example: true,
+      name: "Lisbon & Porto", from: "Saskatoon", fromCode: "YXE", destination: "Lisbon & Porto, Portugal", toCode: "LIS",
+      start: "2026-12-18", end: "2026-12-28", currency: "CAD", budget: 4200, travellers: 1,
+      items: [
+        { id: uid(), cat: "flight", title: "Saskatoon → Lisbon (via Toronto)", date: "2026-12-18", status: "paid", est: 1450, actual: 1386, bookBy: "", ref: "AC 4KQ7TR", notes: "Return Porto → Saskatoon Dec 28" },
+        { id: uid(), cat: "stay", title: "Alfama guesthouse, 4 nights", date: "2026-12-19", status: "booked", est: 720, actual: 690, bookBy: "", ref: "", notes: "Pay at check-in" },
+        { id: uid(), cat: "insurance", title: "Travel medical insurance", date: "", status: "todo", est: 120, actual: "", bookBy: "2026-10-15", ref: "", notes: "" },
+        { id: uid(), cat: "stay", title: "Porto apartment, 5 nights", date: "2026-12-23", status: "todo", est: 650, actual: "", bookBy: "2026-10-20", ref: "", notes: "Prices rising for the holidays" },
+        { id: uid(), cat: "transport", title: "Train Lisbon → Porto", date: "2026-12-23", status: "todo", est: 60, actual: "", bookBy: "2026-11-15", ref: "", notes: "" },
+        { id: uid(), cat: "activity", title: "Sintra day trip", date: "2026-12-21", status: "todo", est: 90, actual: "", bookBy: "2026-12-01", ref: "", notes: "Pena Palace timed tickets" },
+        { id: uid(), cat: "food", title: "Meals & daily spending (10 days)", date: "", status: "spend", est: 900, actual: "", bookBy: "", ref: "", notes: "About $90 a day" }
+      ]
+    };
+  }
+
+  let state = load();
+  let filter = "all";
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s && Array.isArray(s.trips)) {
+          // Refresh the example trip saved by the first version so it shows airport codes.
+          s.trips = s.trips.map((t) => (t.example && !t.from ? { ...sampleTrip(), id: t.id } : t));
+          return s;
+        }
+      }
+    } catch (e) {}
+    const t = sampleTrip();
+    return { trips: [t], activeId: t.id };
+  }
+  function saveLocal() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} }
+  function save() { stampChanges(); saveLocal(); scheduleSync(); }
+  const activeTrip = () => state.trips.find((t) => t.id === state.activeId) || state.trips[0];
+
+  function cost(it) {
+    const hasActual = it.actual !== "" && it.actual != null && !isNaN(Number(it.actual));
+    return Number(hasActual && it.status !== "todo" ? it.actual : it.est) || 0;
+  }
+  function totals(trip) {
+    const t = { planned: 0, paid: 0, booked: 0, todo: 0, spend: 0 };
+    trip.items.forEach((it) => { const c = cost(it); t.planned += c; t[it.status] = (t[it.status] || 0) + c; });
+    t.remaining = (Number(trip.budget) || 0) - t.planned;
+    return t;
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    let el = document.querySelector(".toast");
+    if (!el) { el = document.createElement("div"); el.className = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+    el.textContent = msg; el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.hidden = true; }, 2200);
+  }
+
+  /* ---------- Cloud sync (Supabase) ----------
+     Turned on by config.js (see SUPABASE-SETUP.md). Each trip is one row in the
+     "trips" table, visible only to the signed-in user. Changes save to this
+     browser first, then upload a moment later. On load, on sign-in and when
+     the tab comes back into view, the app pulls from Supabase and merges trip
+     by trip; if the same trip changed in two places, the newer edit wins. */
+  const SUPABASE_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
+  const cloud = { enabled: false, client: null, user: null, status: "off", lastSync: null, error: "", timer: null, running: false, again: false, synced: {} };
+  const tripJSON = (t) => { const { updatedAt, ...rest } = t; return JSON.stringify(rest); };
+  const syncedKey = () => "travel-planner-synced-" + (cloud.user ? cloud.user.id : "");
+  function loadSynced() { try { cloud.synced = JSON.parse(localStorage.getItem(syncedKey()) || "{}"); } catch (e) { cloud.synced = {}; } }
+  function storeSynced() { try { localStorage.setItem(syncedKey(), JSON.stringify(cloud.synced)); } catch (e) {} }
+  const lastLocal = {};
+  function stampChanges() {
+    const now = new Date().toISOString();
+    state.trips.forEach((t) => {
+      const j = tripJSON(t);
+      if (lastLocal[t.id] !== undefined && lastLocal[t.id] !== j) t.updatedAt = now;
+      if (!t.updatedAt) t.updatedAt = now;
+      lastLocal[t.id] = j;
+    });
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src; s.async = true;
+      s.onload = () => resolve(); s.onerror = () => reject(new Error("Couldn't load " + src));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function initCloud() {
+    if (!/^https?:$/.test(location.protocol)) return;
+    try { await loadScript("config.js"); } catch (e) { return; } // no config.js: sync stays off
+    const cfg = window.TRAVEL_PLANNER_CONFIG || {};
+    if (!cfg.supabaseUrl || !cfg.supabaseKey) return;
+    cloud.enabled = true;
+    cloud.status = "connecting";
+    renderSync();
+    try {
+      await loadScript(SUPABASE_JS);
+      cloud.client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      });
+      cloud.client.auth.onAuthStateChange((event, session) => {
+        const was = cloud.user && cloud.user.id;
+        cloud.user = session ? session.user : null;
+        if (cloud.user && cloud.user.id !== was) {
+          loadSynced();
+          cloud.status = "idle";
+          syncNow();
+          if (event === "SIGNED_IN") { closeModal(); toast("Signed in. Your trips will sync."); }
+        } else if (!cloud.user) {
+          cloud.status = "signed-out";
+        }
+        renderSync();
+      });
+      const { data } = await cloud.client.auth.getSession();
+      cloud.user = data.session ? data.session.user : null;
+      cloud.status = cloud.user ? "idle" : "signed-out";
+      if (cloud.user) { loadSynced(); syncNow(); }
+      // Clean the sign-in token out of the address bar.
+      if (/access_token=|error_description=/.test(location.hash)) history.replaceState(null, "", location.pathname + location.search);
+    } catch (e) {
+      cloud.status = "error";
+      cloud.error = "Couldn't connect to Supabase. Check config.js and your internet connection.";
+    }
+    renderSync();
+  }
+
+  function scheduleSync() {
+    if (!cloud.user) return;
+    clearTimeout(cloud.timer);
+    cloud.timer = setTimeout(syncNow, 1200);
+  }
+
+  async function syncNow() {
+    if (!cloud.client || !cloud.user) return;
+    if (cloud.running) { cloud.again = true; return; }
+    cloud.running = true; cloud.status = "syncing"; renderSync();
+    try {
+      const uidv = cloud.user.id;
+      const { data: rows, error } = await cloud.client.from("trips").select("id, data, updated_at, deleted");
+      if (error) throw error;
+      const now = new Date().toISOString();
+      const upserts = [];
+      const remoteIds = new Set();
+      let changedLocal = false;
+
+      for (const row of rows || []) {
+        remoteIds.add(row.id);
+        const idx = state.trips.findIndex((t) => t.id === row.id);
+        const local = idx >= 0 ? state.trips[idx] : null;
+        const remoteJSON = row.deleted ? null : tripJSON({ ...row.data, id: row.id });
+        const localDirty = local && tripJSON(local) !== cloud.synced[row.id];
+
+        if (row.deleted) {
+          if (local && !localDirty) { state.trips.splice(idx, 1); changedLocal = true; delete cloud.synced[row.id]; }
+          else if (local) upserts.push(local);
+          else delete cloud.synced[row.id];
+        } else if (!local) {
+          if (cloud.synced[row.id] !== undefined) {
+            upserts.push({ id: row.id, _delete: true }); // deleted here since the last sync
+          } else {
+            state.trips.push({ ...row.data, id: row.id, updatedAt: row.updated_at });
+            cloud.synced[row.id] = remoteJSON; changedLocal = true;
+          }
+        } else if (!localDirty) {
+          if (remoteJSON !== cloud.synced[row.id]) {
+            state.trips[idx] = { ...row.data, id: row.id, updatedAt: row.updated_at };
+            changedLocal = true;
+          }
+          cloud.synced[row.id] = remoteJSON;
+        } else if (remoteJSON === cloud.synced[row.id] || !cloud.synced[row.id] && remoteJSON === tripJSON(local)) {
+          upserts.push(local);
+        } else {
+          // Changed in both places: the newer edit wins.
+          if ((local.updatedAt || "") >= (row.updated_at || "")) upserts.push(local);
+          else { state.trips[idx] = { ...row.data, id: row.id, updatedAt: row.updated_at }; cloud.synced[row.id] = remoteJSON; changedLocal = true; }
+        }
+      }
+      for (const t of state.trips) if (!t.example && !remoteIds.has(t.id)) upserts.push(t);
+      for (const id of Object.keys(cloud.synced)) if (!remoteIds.has(id) && !state.trips.some((t) => t.id === id)) delete cloud.synced[id];
+
+      if (upserts.length) {
+        const payload = upserts.map((t) => t._delete
+          ? { user_id: uidv, id: t.id, data: {}, deleted: true, updated_at: now }
+          : { user_id: uidv, id: t.id, data: (({ id, updatedAt, ...rest }) => rest)(t), deleted: false, updated_at: t.updatedAt || now });
+        const { error: upErr } = await cloud.client.from("trips").upsert(payload, { onConflict: "user_id,id" });
+        if (upErr) throw upErr;
+        upserts.forEach((t) => { if (t._delete) delete cloud.synced[t.id]; else cloud.synced[t.id] = tripJSON(t); });
+      }
+      storeSynced();
+      if (changedLocal) {
+        if (!state.trips.some((t) => t.id === state.activeId)) state.activeId = state.trips[0]?.id;
+        state.trips.forEach((t) => { lastLocal[t.id] = tripJSON(t); });
+        saveLocal(); render();
+      }
+      cloud.status = "synced"; cloud.lastSync = new Date(); cloud.error = "";
+    } catch (e) {
+      cloud.status = "error";
+      cloud.error = /relation .*trips.* does not exist|Could not find the table/i.test(e.message || "")
+        ? "The trips table is missing. Run supabase/schema.sql in your Supabase project's SQL editor."
+        : navigator.onLine === false ? "You're offline. Changes are saved on this device and will sync when you're back online."
+        : "Sync failed: " + (e.message || "unknown error");
+    }
+    cloud.running = false;
+    renderSync();
+    if (cloud.again) { cloud.again = false; syncNow(); }
+  }
+
+  function renderSync() {
+    const btn = document.getElementById("syncBtn");
+    if (!btn) return;
+    btn.hidden = !cloud.enabled;
+    const labels = {
+      connecting: "Connecting…", "signed-out": "Sign in to sync", idle: "Synced", syncing: "Syncing…",
+      synced: "Synced", error: "Sync issue", off: ""
+    };
+    btn.textContent = labels[cloud.status] || "Sync";
+    btn.dataset.state = cloud.status;
+    btn.title = cloud.status === "error" ? cloud.error : cloud.user ? "Signed in as " + cloud.user.email : "Save your trips to your account";
+  }
+
+  function syncDialog() {
+    if (!cloud.client) {
+      openModal("Sync", `<p style="margin:0">${esc(cloud.error || "Sync is still connecting. Try again in a moment.")}</p><div class="modal-actions" style="margin-top:14px"><button class="btn btn-primary" type="button" data-action="close">OK</button></div>`);
+      return;
+    }
+    if (!cloud.user) {
+      openModal("Sign in to sync", `
+        <div class="form">
+          <p class="field full" style="margin:0">Sign in to save your trips to your account and see them on every device. We'll email you a sign-in link; there's no password.</p>
+          <div class="field full"><label for="s-email">Email</label><input id="s-email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></div>
+          <p class="field full hint" id="sStatus" role="status" style="margin:0"></p>
+          <div class="modal-actions field full">
+            <button class="btn" type="button" data-action="close">Cancel</button>
+            <button class="btn btn-primary" type="button" data-save>Email me a link</button>
+          </div>
+        </div>`, (m) => {
+        const status = m.querySelector("#sStatus");
+        wireSave(m, async () => {
+          const email = m.querySelector("#s-email").value.trim();
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { status.textContent = "Enter a valid email address."; status.style.color = "var(--danger)"; return; }
+          const btn = m.querySelector("[data-save]");
+          btn.disabled = true; status.style.color = ""; status.textContent = "Sending…";
+          const { error } = await cloud.client.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+          btn.disabled = false;
+          if (error) {
+            status.style.color = "var(--danger)";
+            status.textContent = /rate limit/i.test(error.message) ? "Too many sign-in emails were sent. Wait a few minutes and try again." : "Couldn't send the link: " + error.message;
+          } else {
+            status.style.color = "var(--paid)";
+            status.textContent = `Check ${email} and open the link on this device. You can close this box.`;
+          }
+        });
+      });
+      return;
+    }
+    const n = state.trips.filter((t) => !t.example).length;
+    openModal("Sync", `
+      <div class="form">
+        <p class="field full" style="margin:0">Signed in as <strong>${esc(cloud.user.email || "")}</strong>.</p>
+        <p class="field full hint" style="margin:0">${n} trip${n === 1 ? "" : "s"} on this device. ${cloud.lastSync ? "Last synced " + cloud.lastSync.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + "." : ""}${cloud.status === "error" ? `<br><span style="color:var(--danger)">${esc(cloud.error)}</span>` : ""}</p>
+        <p class="field full hint" style="margin:0">Example trips aren't synced. Signing out keeps a copy of your trips on this device.</p>
+        <div class="modal-actions field full">
+          <button class="btn btn-danger spacer" type="button" id="sOut">Sign out</button>
+          <button class="btn" type="button" id="sNow">Sync now</button>
+          <button class="btn btn-primary" type="button" data-action="close">Done</button>
+        </div>
+      </div>`, (m) => {
+      m.querySelector("#sNow").addEventListener("click", async () => { closeModal(); await syncNow(); toast(cloud.status === "error" ? cloud.error : "Synced"); });
+      m.querySelector("#sOut").addEventListener("click", async () => {
+        await cloud.client.auth.signOut();
+        cloud.user = null; cloud.status = "signed-out"; closeModal(); renderSync(); toast("Signed out");
+      });
+    });
+  }
+
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && cloud.user) syncNow(); });
+  window.addEventListener("online", () => { if (cloud.user) syncNow(); });
+
+  /* ---------- Render ---------- */
+  function renderSelect() {
+    const sel = document.getElementById("tripSelect");
+    sel.innerHTML = state.trips.map((t) => `<option value="${t.id}" ${t.id === state.activeId ? "selected" : ""}>${esc(t.name)}</option>`).join("");
+    sel.hidden = state.trips.length === 0;
+  }
+
+  function render() {
+    renderSelect();
+    const app = document.getElementById("app");
+    const trip = activeTrip();
+    if (!trip) {
+      app.innerHTML = `<section class="pass"><div class="pass-main"><span class="eyebrow">No trips yet</span><div class="trip-name">Where to next?</div><p style="margin:0;color:var(--muted)">Add a trip to start tracking what to book and what it will cost.</p><div><button class="btn btn-primary" type="button" data-action="new-trip">+ New trip</button></div></div></section>`;
+      save();
+      return;
+    }
+    state.activeId = trip.id;
+    const t = totals(trip);
+    const cur = trip.currency;
+    const today = todayISO();
+    const daysTo = trip.start ? daysBetween(today, trip.start) : null;
+    const nights = trip.start && trip.end ? daysBetween(trip.start, trip.end) : null;
+    let countHTML;
+    if (daysTo === null) countHTML = `<span class="eyebrow">Departure</span><div class="trip-name">Date not set</div>`;
+    else if (daysTo > 0) countHTML = `<span class="eyebrow">Departs in</span><div class="countdown">${daysTo}<small>${daysTo === 1 ? "day" : "days"}</small></div>`;
+    else if (daysTo === 0) countHTML = `<span class="eyebrow">Departs</span><div class="countdown">Today</div>`;
+    else if (trip.end && daysBetween(trip.end, today) > 0) countHTML = `<span class="eyebrow">Status</span><div class="countdown" style="font-size:2.4rem">Landed</div>`;
+    else countHTML = `<span class="eyebrow">Status</span><div class="countdown" style="font-size:2.4rem">En route</div>`;
+
+    const budget = Number(trip.budget) || 0;
+    const scale = Math.max(budget, t.planned, 1);
+    const pct = (v) => Math.min(100, (v / scale) * 100);
+
+    const order = { todo: 0, booked: 1, paid: 2, spend: 3 };
+    const items = trip.items
+      .filter((it) => filter === "all" || it.status === filter)
+      .slice()
+      .sort((a, b) => {
+        if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
+        return (a.bookBy || a.date || "9999").localeCompare(b.bookBy || b.date || "9999");
+      });
+    const counts = { all: trip.items.length, todo: 0, booked: 0, paid: 0, spend: 0 };
+    trip.items.forEach((it) => counts[it.status]++);
+
+    const nextUp = trip.items.filter((it) => it.status === "todo")
+      .sort((a, b) => (a.bookBy || "9999").localeCompare(b.bookBy || "9999")).slice(0, 6);
+
+    const catTotals = CATEGORIES.map((c) => ({ ...c, sum: trip.items.filter((it) => it.cat === c.key).reduce((s, it) => s + cost(it), 0) }))
+      .filter((c) => c.sum > 0).sort((a, b) => b.sum - a.sum);
+    const catMax = Math.max(1, ...catTotals.map((c) => c.sum));
+    const fromCode = codeFor(trip.fromCode, trip.from);
+    const toCode = codeFor(trip.toCode, trip.destination || trip.name);
+
+    app.innerHTML = `
+      <section class="pass" aria-label="Trip overview">
+        <div class="pass-main">
+          <div class="pass-head">
+            <span class="airline">Boarding pass</span>
+            <button class="btn btn-ghost" type="button" data-action="edit-trip">Edit trip</button>
+          </div>
+          <div class="route">
+            <div><div class="code">${esc(fromCode)}</div><div class="city">${esc(trip.from || "Home")}</div></div>
+            <div class="flightline"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.flight}</svg></div>
+            <div class="to"><div class="code">${esc(toCode)}</div><div class="city">${esc(trip.destination || trip.name)}</div></div>
+          </div>
+          <div class="fields">
+            <div style="grid-column: span 2; min-width:0"><span class="eyebrow">Trip</span><div class="trip-name">${esc(trip.name)}</div></div>
+            <div><span class="eyebrow">Depart</span><div class="val">${trip.start ? fmtDate(trip.start, { day: "2-digit", month: "short", year: "numeric" }) : "—"}</div></div>
+            <div><span class="eyebrow">Return</span><div class="val">${trip.end ? fmtDate(trip.end, { day: "2-digit", month: "short", year: "numeric" }) : "—"}</div></div>
+          </div>
+        </div>
+        <div class="pass-stub">
+          <div>${countHTML}</div>
+          <div style="display:grid;gap:10px">
+            <div><span class="eyebrow">Nights · Travellers</span><div class="val mono">${nights > 0 ? nights : "—"} · ${trav(trip)}</div></div>
+            <div><span class="eyebrow">Budget</span><div class="val mono">${money(budget, cur)}</div></div>
+          </div>
+          <div class="barcode" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      ${trip.example ? `<div class="notice"><span><strong>This is an example trip.</strong> Edit it, or clear it and add your own.</span><button class="btn" type="button" data-action="clear-example">Clear example</button></div>` : ""}
+
+      <section class="fare" aria-label="Budget summary">
+        <div class="stats">
+          <div class="stat"><span class="eyebrow">Budget</span><span class="v">${money(budget, cur)}</span></div>
+          <div class="stat"><span class="eyebrow">Planned cost</span><span class="v">${money(t.planned, cur)}</span></div>
+          <div class="stat"><span class="eyebrow">Paid so far</span><span class="v">${money(t.paid, cur)}</span></div>
+          ${budget > 0 ? `<div class="stat"><span class="eyebrow">${t.remaining < 0 ? "Over budget" : "Left to plan"}</span><span class="v ${t.remaining < 0 ? "over" : ""}">${money(Math.abs(t.remaining), cur)}</span></div>` : `<div class="stat"><span class="eyebrow">Left to plan</span><button class="btn btn-sm" type="button" data-action="edit-trip" style="justify-self:start">Set a budget</button></div>`}
+        </div>
+        <div class="meter" role="img" aria-label="Paid ${money(t.paid, cur)}, booked ${money(t.booked, cur)}, still to book or spend ${money(t.todo + t.spend, cur)}">
+          <i style="width:${pct(t.paid)}%;background:var(--paid)"></i>
+          <i style="width:${pct(t.booked)}%;background:var(--booked)"></i>
+          <i style="width:${pct(t.todo + t.spend)}%;background:var(--sun)"></i>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--paid)"></i>Paid ${money(t.paid, cur)}</span>
+          <span><i style="background:var(--booked)"></i>Booked, not paid ${money(t.booked, cur)}</span>
+          <span><i style="background:var(--sun)"></i>To book &amp; spending ${money(t.todo + t.spend, cur)}</span>
+        </div>
+      </section>
+
+      ${finderHTML(trip)}
+
+      <div class="work">
+        <section class="panel" aria-labelledby="bookingsHead">
+          <div class="panel-head">
+            <div><span class="eyebrow">Itinerary</span><h2 id="bookingsHead">Bookings &amp; costs</h2></div>
+            <button class="btn btn-primary" type="button" data-action="add-item">+ Add item</button>
+          </div>
+          <div class="chips" role="group" aria-label="Filter by status">
+            ${["all", "todo", "booked", "paid", "spend"].map((k) => `<button class="chip" type="button" data-filter="${k}" aria-pressed="${filter === k}">${k === "all" ? "All" : STATUS[k]} <span class="num">${counts[k]}</span></button>`).join("")}
+          </div>
+          ${items.length ? `<ul class="items">${items.map((it) => itemRow(it, cur, today)).join("")}</ul>` : `<div class="empty">${trip.items.length ? "Nothing with this status." : "Add flights, places to stay, tours and spending money to see your total."}</div>`}
+        </section>
+
+        <aside class="side">
+          <section class="board" aria-labelledby="nextHead">
+            <div class="panel-head"><div><span class="eyebrow">Departures</span><h2 id="nextHead">Book next</h2></div></div>
+            ${nextUp.length ? `<ul class="board-rows">${nextUp.map((it) => {
+              const d = it.bookBy ? daysBetween(today, it.bookBy) : null;
+              const when = d === null ? `<span class="when">No date</span>` : d < 0 ? `<span class="when late">Overdue</span>` : d === 0 ? `<span class="when late">Today</span>` : `<span class="when ${d <= 14 ? "soon" : ""}">${d}d</span>`;
+              return `<li><span class="what">${esc(it.title)}</span>${when}<span class="cat">${catLabel(it.cat)}${it.bookBy ? " · by " + fmtDate(it.bookBy) : ""}</span><span class="cat num" style="text-align:right">${money(cost(it), cur)}</span></li>`;
+            }).join("")}</ul>` : `<div class="empty">All booked. Bon voyage!</div>`}
+          </section>
+
+          <section class="panel" aria-labelledby="catHead">
+            <div class="panel-head"><div><span class="eyebrow">Where it goes</span><h2 id="catHead">By category</h2></div></div>
+            ${catTotals.length ? `<div class="cats">${catTotals.map((c) => `
+              <div class="cat-row">
+                <div class="top"><span>${c.label}</span><span class="num">${money(c.sum, cur)}${budget ? ` <span class="hint">${Math.round((c.sum / budget) * 100)}%</span>` : ""}</span></div>
+                <div class="bar"><i style="width:${(c.sum / catMax) * 100}%"></i></div>
+              </div>`).join("")}</div>` : `<div class="empty">No costs yet.</div>`}
+          </section>
+
+          <section class="panel" aria-labelledby="dataHead">
+            <div class="panel-head"><div><span class="eyebrow">Backup</span><h2 id="dataHead">Your data</h2></div></div>
+            <p class="hint" style="padding:0 18px 10px;margin:0">Trips are saved in this browser. Export a backup to move them to another device.</p>
+            <div class="data-actions">
+              <button class="btn" type="button" data-action="export">Export backup</button>
+              <button class="btn" type="button" data-action="copy">Copy as text</button>
+              <label class="btn" for="importFile" style="display:inline-block;cursor:pointer">Import backup</label>
+              <input id="importFile" type="file" accept="application/json,.json" hidden>
+            </div>
+          </section>
+        </aside>
+      </div>`;
+    save();
+  }
+
+  function itemRow(it, cur, today) {
+    const c = cost(it);
+    let deadline = "";
+    if (it.status === "todo" && it.bookBy) {
+      const d = daysBetween(today, it.bookBy);
+      deadline = d < 0 ? `<span class="warn late">Book by ${fmtDate(it.bookBy)} · overdue</span>` : `<span class="${d <= 14 ? "warn" : ""}">Book by ${fmtDate(it.bookBy)}</span>`;
+    }
+    const sub = it.status !== "todo" && it.status !== "spend" && it.actual !== "" && it.actual != null && Number(it.actual) !== Number(it.est)
+      ? `<div class="sub">est. ${money(it.est, cur)}</div>` : (it.status === "todo" ? `<div class="sub">estimate</div>` : "");
+    return `<li class="item">
+      <div class="icon">${icon(it.cat)}</div>
+      <div style="min-width:0">
+        <div class="item-title">${esc(it.title)}</div>
+        <div class="item-meta"><span>${catLabel(it.cat)}</span>${it.date ? `<span>${fmtDate(it.date)}</span>` : ""}${it.ref ? `<span class="mono">${esc(it.ref)}</span>` : ""}${deadline}</div>
+      </div>
+      <div class="item-side">
+        <div class="amt num">${money(c, cur)}${sub}</div>
+        <button class="stamp ${it.status}" type="button" data-action="cycle" data-id="${it.id}" ${it.status === "spend" ? "disabled" : `title="Tap to change status"`}>${STATUS[it.status]}</button>
+      </div>
+      <button class="btn btn-ghost" type="button" data-action="edit-item" data-id="${it.id}" aria-label="Edit ${esc(it.title)}">Edit</button>
+    </li>`;
+  }
+
+  /* ---------- Find options ----------
+     Two optional sources:
+     - Google Places (a Google Maps API key kept in this browser): hotels and
+       things to do with photos, ratings and Google's price level.
+     - A price-search helper (advanced, see PRICE-SEARCH-SETUP.md): live flight
+       and hotel prices through SerpApi. */
+  const HELPER_KEY = "travel-planner-helper";
+  const GKEY_KEY = "travel-planner-google-key";
+  let helperUrl = "", googleKey = "";
+  try { helperUrl = localStorage.getItem(HELPER_KEY) || ""; googleKey = localStorage.getItem(GKEY_KEY) || ""; } catch (e) {}
+  const finder = { tripId: null, tab: "flights", inputs: {}, res: {}, added: new Set() };
+
+  const TABS = [
+    { key: "flights", label: "Flights", icon: "flight" },
+    { key: "hotels", label: "Hotels", icon: "stay" },
+    { key: "activities", label: "Things to do", icon: "activity" }
+  ];
+
+  // Which source each tab uses right now.
+  function sourceFor(tab) {
+    if (tab === "flights") return helperUrl ? "helper" : "link";
+    if (tab === "hotels") return helperUrl ? "helper" : googleKey ? "google" : "none";
+    return googleKey ? "google" : helperUrl ? "helper" : "none";
+  }
+
+  /* Google Maps JavaScript API, loaded on demand with the key from this browser. */
+  let googleLoad = null, googleAuthError = false;
+  function loadGoogle() {
+    if (googleLoad) return googleLoad;
+    googleLoad = new Promise((resolve, reject) => {
+      window.gm_authFailure = () => {
+        googleAuthError = true;
+        Object.keys(finder.res).forEach((t) => {
+          if (finder.res[t] && finder.res[t].status === "loading") finder.res[t] = { status: "error", error: googleKeyError() };
+        });
+        render();
+      };
+      window.__tpGoogleReady = () => resolve();
+      const s = document.createElement("script");
+      s.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(googleKey) + "&v=weekly&loading=async&callback=__tpGoogleReady";
+      s.async = true;
+      s.onerror = () => { googleLoad = null; reject(new TypeError("load failed")); };
+      document.head.appendChild(s);
+    });
+    return googleLoad;
+  }
+  function googleKeyError() {
+    return "Google rejected the API key. In Google Cloud, check that the Maps JavaScript API and Places API (New) are enabled, billing is on, and the key allows this website (" + location.origin + "/*).";
+  }
+  const PRICE_LEVEL = { FREE: "Free", INEXPENSIVE: "$", MODERATE: "$$", EXPENSIVE: "$$$", VERY_EXPENSIVE: "$$$$" };
+  function priceLevelText(v) {
+    if (!v) return "";
+    const k = String(v).toUpperCase().replace(/^PRICE_LEVEL_/, "").replace(/\s+/g, "_");
+    return PRICE_LEVEL[k] || "";
+  }
+  function moneyAmount(m) {
+    if (!m) return null;
+    const units = Number(m.units || 0), nanos = Number(m.nanos || 0);
+    const v = units + nanos / 1e9;
+    return isNaN(v) ? null : { value: Math.round(v * 100) / 100, currency: m.currencyCode || "" };
+  }
+
+  async function googleSearch(tab, inp) {
+    if (googleAuthError) throw new Error(googleKeyError());
+    await loadGoogle();
+    const { Place } = await google.maps.importLibrary("places");
+    const area = inp.area.trim();
+    const request = {
+      textQuery: tab === "hotels" ? "hotels in " + area : "top things to do in " + area,
+      fields: ["id", "displayName", "formattedAddress", "rating", "userRatingCount", "priceLevel", "priceRange",
+               "photos", "googleMapsURI", "websiteURI", "primaryTypeDisplayName", "editorialSummary"],
+      maxResultCount: 10,
+      language: "en"
+    };
+    if (tab === "hotels") request.includedType = "lodging";
+    const { places } = await Place.searchByText(request);
+    return {
+      results: (places || []).map((p) => {
+        let image = "";
+        try { image = p.photos && p.photos[0] ? p.photos[0].getURI({ maxWidth: 480 }) : ""; } catch (e) {}
+        const lo = moneyAmount(p.priceRange && p.priceRange.startPrice);
+        const hi = moneyAmount(p.priceRange && p.priceRange.endPrice);
+        return {
+          name: p.displayName || "Unnamed place",
+          type: p.primaryTypeDisplayName || "",
+          rating: p.rating || null,
+          reviews: p.userRatingCount || null,
+          level: priceLevelText(p.priceLevel),
+          rangeLo: lo, rangeHi: hi,
+          description: p.editorialSummary || "",
+          address: p.formattedAddress || "",
+          image,
+          link: p.googleMapsURI || p.websiteURI || "",
+          website: p.websiteURI || ""
+        };
+      })
+    };
+  }
+
+  function finderDefaults(trip) {
+    const place = trip.destination || trip.name || "";
+    return {
+      flights: { from: codeFor(trip.fromCode, trip.from), to: codeFor(trip.toCode, trip.destination || trip.name), depart: trip.start || "", ret: trip.end || "" },
+      hotels: { area: place, checkin: trip.start || "", checkout: trip.end || "", sort: "" },
+      activities: { area: place }
+    };
+  }
+  function syncFinder(trip) {
+    if (finder.tripId !== trip.id) {
+      finder.tripId = trip.id;
+      finder.inputs = finderDefaults(trip);
+      finder.res = {};
+    }
+  }
+  const trav = (trip) => Math.max(1, parseInt(trip.travellers, 10) || 1);
+  function fmtTime(s) { const m = String(s || "").match(/(\d{1,2}):(\d{2})/); return m ? m[1].padStart(2, "0") + ":" + m[2] : "—"; }
+  function fmtDur(min) { if (!min) return ""; const h = Math.floor(min / 60), m = min % 60; return `${h}h${m ? " " + m + "m" : ""}`; }
+  function nightsOf(a, b) { return a && b ? Math.max(1, daysBetween(a, b)) : 1; }
+  function flightsUrl(inp, trip) {
+    const from = (inp.from || "").toUpperCase(), to = (inp.to || "").toUpperCase();
+    const n = trav(trip);
+    return "https://www.google.com/travel/flights?q=" + encodeURIComponent(
+      `Flights from ${from} to ${to} on ${inp.depart || ""}${inp.ret ? " through " + inp.ret : " one way"}${n > 1 ? " for " + n + " adults" : ""}`);
+  }
+
+  function finderHTML(trip) {
+    syncFinder(trip);
+    const tab = finder.tab;
+    const inp = finder.inputs[tab];
+    const r = finder.res[tab];
+    const src = sourceFor(tab);
+    let controls = "";
+    if (tab === "flights") {
+      controls = `
+        <div class="field"><label for="fx-from">From</label><input id="fx-from" class="f-code code-input" maxlength="3" data-finder="from" value="${esc(inp.from)}"></div>
+        <div class="field"><label for="fx-to">To</label><input id="fx-to" class="f-code code-input" maxlength="3" data-finder="to" value="${esc(inp.to)}"></div>
+        <div class="field"><label for="fx-depart">Depart</label><input id="fx-depart" class="f-date" type="date" data-finder="depart" value="${esc(inp.depart)}"></div>
+        <div class="field"><label for="fx-ret">Return</label><input id="fx-ret" class="f-date" type="date" data-finder="ret" value="${esc(inp.ret)}"></div>`;
+    } else if (tab === "hotels") {
+      controls = `<div class="field f-wide"><label for="fx-area">Where</label><input id="fx-area" data-finder="area" value="${esc(inp.area)}" placeholder="Lisbon"></div>`;
+      if (src === "helper") controls += `
+        <div class="field"><label for="fx-in">Check-in</label><input id="fx-in" class="f-date" type="date" data-finder="checkin" value="${esc(inp.checkin)}"></div>
+        <div class="field"><label for="fx-out">Check-out</label><input id="fx-out" class="f-date" type="date" data-finder="checkout" value="${esc(inp.checkout)}"></div>
+        <div class="field"><label for="fx-sort">Sort</label><select id="fx-sort" data-finder="sort">
+          ${[["", "Best match"], ["3", "Lowest price"], ["8", "Highest rated"], ["13", "Most reviewed"]].map(([k, l]) => `<option value="${k}" ${inp.sort === k ? "selected" : ""}>${l}</option>`).join("")}
+        </select></div>`;
+    } else {
+      controls = `<div class="field f-wide"><label for="fx-act">Where</label><input id="fx-act" data-finder="area" value="${esc(inp.area)}" placeholder="Lisbon"></div>`;
+    }
+
+    let action, label;
+    if (src === "link") { action = "open-flights"; label = "Search Google Flights"; }
+    else if (src === "none") { action = "sample-search"; label = "Show samples"; }
+    else { action = "search"; label = "Search"; }
+
+    let body;
+    if (r && r.status === "loading") {
+      body = `<div class="empty"><span class="spinner" aria-hidden="true"></span>Searching…</div>`;
+    } else if (r && r.status === "error") {
+      body = `<div class="empty" role="alert" style="color:var(--danger)">${esc(r.error)}</div>`;
+    } else if (r && r.status === "done") {
+      body = resultsHTML(tab, r, trip);
+    } else if (src === "link") {
+      body = `<div class="empty" style="display:grid;gap:12px;justify-items:center">
+          <span>Compare flights and prices on Google Flights, then add the one you choose here so it counts toward your budget.</span>
+          <span class="actions" style="justify-content:center">
+            <a class="btn btn-primary" href="${esc(flightsUrl(inp, trip))}" target="_blank" rel="noopener">Search Google Flights</a>
+            <button class="btn" type="button" data-action="add-flight">Add a flight</button>
+            <button class="btn btn-ghost" type="button" data-action="sample-search">Sample results</button>
+          </span>
+        </div>`;
+    } else if (src === "none") {
+      body = `<div class="empty" style="display:grid;gap:12px;justify-items:center">
+          <span>Add your Google Maps API key to find ${tab === "hotels" ? "hotels" : "things to do"} with photos, ratings and price levels.</span>
+          <span class="actions" style="justify-content:center"><button class="btn btn-primary" type="button" data-action="helper-settings">Add API key</button><button class="btn" type="button" data-action="sample-search">Show sample results</button></span>
+        </div>`;
+    } else {
+      body = `<div class="empty">Search to see ${tab === "hotels" ? "places to stay" : "things to do"} in ${esc(inp.area || "your destination")}.</div>`;
+    }
+
+    const sources = [googleKey ? "Google Places" : "", helperUrl ? "Price helper" : ""].filter(Boolean);
+    return `
+      <section class="panel finder" aria-labelledby="finderHead">
+        <div class="panel-head">
+          <div><span class="eyebrow">Explore</span><h2 id="finderHead">Find options</h2></div>
+          <div class="actions" style="align-items:center">
+            <span class="conn ${sources.length ? "on" : ""}">${sources.length ? esc(sources.join(" + ")) : "Not connected"}</span>
+            <button class="btn btn-ghost btn-sm" type="button" data-action="helper-settings">Settings</button>
+          </div>
+        </div>
+        <div class="tabs" role="tablist">
+          ${TABS.map((t) => `<button class="tab" role="tab" type="button" data-tab="${t.key}" aria-selected="${tab === t.key}">${icon(t.icon)}${t.label}</button>`).join("")}
+        </div>
+        <div class="finder-controls">
+          ${controls}
+          ${action === "open-flights"
+            ? `<a class="btn btn-primary" id="gfLink" href="${esc(flightsUrl(inp, trip))}" target="_blank" rel="noopener">${label}</a>`
+            : `<button class="btn btn-primary" type="button" data-action="${action}">${label}</button>`}
+        </div>
+        <div class="results" aria-live="polite">${body}</div>
+      </section>`;
+  }
+
+  const ratingText = (x) => x.rating ? `★ ${x.rating}${x.reviews ? ` (${Number(x.reviews).toLocaleString()})` : ""}` : "";
+
+  function resultsHTML(tab, r, trip) {
+    const cur = trip.currency;
+    const list = r.data.results || [];
+    const banner = r.sample ? `<div class="sample-banner"><strong>Sample results, not real prices.</strong> ${tab === "flights" ? "Use Search Google Flights for real fares." : "Add your Google Maps API key in Settings to see real places."}</div>` : "";
+    if (!list.length) return banner + `<div class="empty">No results for this search. Try a different spelling or a nearby city.</div>`;
+    const addBtn = (key) => finder.added.has(key)
+      ? `<button class="btn btn-sm btn-added" type="button" disabled>Added</button>`
+      : `<button class="btn btn-sm btn-primary" type="button" data-action="add-result" data-key="${esc(key)}">Add to trip</button>`;
+    const viewLink = (url, label) => url && !r.sample ? `<a class="btn btn-sm" href="${esc(url)}" target="_blank" rel="noopener">${label || "View"}</a>` : "";
+    const img = (x, ic) => `<div class="card-img">${x.image && !r.sample ? `<img src="${esc(x.image)}" alt="" loading="lazy" onerror="this.remove()">` : icon(ic)}</div>`;
+
+    if (tab === "flights") {
+      const n = trav(trip);
+      return banner + `<div class="results-note"><span>${r.data.roundTrip ? "Round-trip" : "One-way"} prices from Google Flights for ${n} traveller${n === 1 ? "" : "s"}. Outbound flight shown.</span>${viewLink(r.data.bookingUrl, "Open in Google Flights")}</div>` +
+        list.map((f, i) => {
+          const key = `${r.id}:${i}`;
+          return `<div class="flight-row">
+            ${f.logo && !r.sample ? `<img src="${esc(f.logo)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'logo-ph'}))">` : `<span class="logo-ph">${icon("flight")}</span>`}
+            <div style="min-width:0">
+              <div class="times">${fmtTime(f.departTime)} → ${fmtTime(f.arriveTime)}</div>
+              <div class="sub2">${esc(f.airlines.join(", ") || "Airline not listed")}${f.flightNumbers.length ? " · " + esc(f.flightNumbers.join(", ")) : ""}</div>
+            </div>
+            <div class="mid" style="min-width:0">
+              <div>${fmtDur(f.durationMin)}</div>
+              <div class="sub2">${f.stops === 0 ? "Nonstop" : `${f.stops} stop${f.stops > 1 ? "s" : ""}${f.layovers.length ? " · " + esc(f.layovers.join(", ")) : ""}`}</div>
+            </div>
+            <div class="price-col">
+              <div>${f.best ? `<span class="tag-best">Best option</span>` : ""}<div class="price">${f.price != null ? money(f.price, cur) : "—"}<small>${r.data.roundTrip ? "round trip" : "one way"}</small></div></div>
+              ${f.price != null ? addBtn(key) : ""}
+            </div>
+          </div>`;
+        }).join("");
+    }
+
+    if (r.kind === "google") {
+      const note = tab === "hotels"
+        ? "Places to stay from Google Maps. Google shows a price level here, not nightly rates, so check the price on the hotel's site and enter it after adding."
+        : "Popular places from Google Maps. Ticket prices aren't always listed, so enter your estimate after adding.";
+      return banner + `<div class="results-note"><span>${note}</span></div><div class="cards">` +
+        list.map((x, i) => {
+          const key = `${r.id}:${i}`;
+          let price;
+          if (x.rangeLo) price = `${money(x.rangeLo.value, x.rangeLo.currency || cur)}${x.rangeHi ? "–" + money(x.rangeHi.value, x.rangeHi.currency || cur) : "+"}<small>price range${x.level ? " · " + x.level : ""}</small>`;
+          else if (x.level) price = `${x.level}<small>${x.level === "Free" ? "no charge" : "price level"}</small>`;
+          else price = `<span class="sub2">Price not listed</span>`;
+          return `<article class="card">
+            ${img(x, tab === "hotels" ? "stay" : "activity")}
+            <div class="card-body">
+              <div class="card-name">${esc(x.name)}</div>
+              <div class="sub2">${[esc(x.type), ratingText(x)].filter(Boolean).join(" · ")}</div>
+              ${x.description ? `<div class="sub2">${esc(x.description)}</div>` : ""}
+              <div class="card-foot">
+                <div class="price" style="font-size:1.25rem">${price}</div>
+                <div class="actions">${viewLink(x.link, "Map")}${tab === "hotels" ? viewLink(x.website, "Website") : ""}${addBtn(key)}</div>
+              </div>
+            </div>
+          </article>`;
+        }).join("") + `</div>`;
+    }
+
+    if (tab === "hotels") {
+      return banner + `<div class="results-note"><span>Prices from Google Hotels for ${r.nights} night${r.nights === 1 ? "" : "s"}.</span>${viewLink(r.data.bookingUrl, "Open in Google Hotels")}</div><div class="cards">` +
+        list.map((h, i) => {
+          const key = `${r.id}:${i}`;
+          return `<article class="card">
+            ${img(h, "stay")}
+            <div class="card-body">
+              <div class="card-name">${esc(h.name)}</div>
+              <div class="sub2">${[h.stars ? `${h.stars}-star` : esc(h.type), ratingText(h)].filter(Boolean).join(" · ")}</div>
+              <div class="card-foot">
+                <div class="price">${h.total != null ? money(h.total, cur) : "—"}<small>${h.perNight != null ? money(h.perNight, cur) + " a night" : "price not listed"}</small></div>
+                <div class="actions">${viewLink(h.link)}${h.total != null || h.perNight != null ? addBtn(key) : ""}</div>
+              </div>
+            </div>
+          </article>`;
+        }).join("") + `</div>`;
+    }
+
+    return banner + `<div class="results-note"><span>Popular places from Google Maps. Ticket prices aren't always listed, so you can set your own estimate after adding.</span></div><div class="cards">` +
+      list.map((a, i) => {
+        const key = `${r.id}:${i}`;
+        return `<article class="card">
+          ${img(a, "activity")}
+          <div class="card-body">
+            <div class="card-name">${esc(a.name)}</div>
+            <div class="sub2">${[esc(a.type), ratingText(a)].filter(Boolean).join(" · ")}</div>
+            ${a.description ? `<div class="sub2">${esc(a.description)}</div>` : ""}
+            <div class="card-foot">
+              <div class="price" style="font-size:1.25rem">${a.price != null ? money(a.price, cur) : (a.priceText ? esc(a.priceText) : "<span class='sub2'>Price not listed</span>")}</div>
+              <div class="actions">${viewLink(a.link)}${addBtn(key)}</div>
+            </div>
+          </div>
+        </article>`;
+      }).join("") + `</div>`;
+  }
+
+  function finderQuery(tab, trip) {
+    const inp = finder.inputs[tab];
+    const p = new URLSearchParams({ currency: trip.currency || "USD", adults: String(trav(trip)) });
+    if (tab === "flights") {
+      const from = (inp.from || "").toUpperCase(), to = (inp.to || "").toUpperCase();
+      if (!/^[A-Z]{3}$/.test(from) || !/^[A-Z]{3}$/.test(to)) throw new Error("Enter 3-letter airport codes, like YXE for Saskatoon.");
+      if (!inp.depart) throw new Error("Choose a departure date.");
+      if (inp.ret && inp.ret < inp.depart) throw new Error("The return date is before the departure date.");
+      p.set("from", from); p.set("to", to); p.set("depart", inp.depart);
+      if (inp.ret) p.set("return", inp.ret);
+    } else if (tab === "hotels") {
+      if (!inp.area.trim()) throw new Error("Enter where you're staying.");
+      if (!inp.checkin || !inp.checkout) throw new Error("Choose check-in and check-out dates.");
+      if (inp.checkout <= inp.checkin) throw new Error("Check-out has to be after check-in.");
+      p.set("q", inp.area.trim()); p.set("checkin", inp.checkin); p.set("checkout", inp.checkout);
+      if (inp.sort) p.set("sort", inp.sort);
+    } else {
+      if (!inp.area.trim()) throw new Error("Enter a city or area.");
+      p.set("q", inp.area.trim());
+    }
+    return p;
+  }
+
+  async function runSearch(trip) {
+    const tab = finder.tab;
+    const src = sourceFor(tab);
+    const inp = finder.inputs[tab];
+    const id = uid();
+    if (src === "google") {
+      if (!inp.area.trim()) { finder.res[tab] = { status: "error", error: "Enter a city or area." }; render(); return; }
+      finder.res[tab] = { status: "loading", id };
+      render();
+      try {
+        const data = await googleSearch(tab, inp);
+        if (finder.res[tab]?.id !== id) return;
+        finder.res[tab] = { status: "done", kind: "google", id, data, ctx: { ...inp } };
+      } catch (e) {
+        if (finder.res[tab]?.id !== id) return;
+        const msg = googleAuthError ? googleKeyError()
+          : e instanceof TypeError && /load/i.test(e.message)
+            ? "Couldn't load Google Maps. Check your internet connection. (Google search doesn't work inside the Claude preview; use your GitHub Pages site.)"
+            : "Google search failed: " + (e.message || "unknown error") + ". If this keeps happening, check your API key settings in Google Cloud.";
+        finder.res[tab] = { status: "error", error: msg };
+      }
+      render();
+      return;
+    }
+    let params;
+    try { params = finderQuery(tab, trip); }
+    catch (e) { finder.res[tab] = { status: "error", error: e.message }; render(); return; }
+    const nights = tab === "hotels" ? nightsOf(finder.inputs.hotels.checkin, finder.inputs.hotels.checkout) : 0;
+    finder.res[tab] = { status: "loading", id };
+    render();
+    try {
+      const res = await fetch(helperUrl.replace(/\/+$/, "") + "/" + tab + "?" + params.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || `The price search helper returned an error (${res.status}).`);
+      if (finder.res[tab]?.id !== id) return;
+      finder.res[tab] = { status: "done", kind: "helper", id, data, nights, ctx: { ...inp } };
+    } catch (e) {
+      if (finder.res[tab]?.id !== id) return;
+      const msg = e instanceof TypeError
+        ? "Couldn't reach the price search helper. Check its address in Settings. (Live search doesn't work inside the Claude preview; use your GitHub Pages site.)"
+        : e.message;
+      finder.res[tab] = { status: "error", error: msg };
+    }
+    render();
+  }
+
+  function sampleSearch(trip) {
+    const tab = finder.tab;
+    const inp = finder.inputs[tab];
+    const k = { CAD: 1, USD: 0.73, EUR: 0.67, GBP: 0.57, AUD: 1.1, CHF: 0.64, MXN: 13, JPY: 108, INR: 61, ETB: 105 }[trip.currency] || 1;
+    const amt = (cad) => Math.round(cad * k);
+    const place = (inp.area || trip.destination || "your destination").split(",")[0];
+    const id = uid();
+    let data, nights = 0, kind = "helper";
+    if (tab === "flights") {
+      const from = (inp.from || "YXE").toUpperCase(), to = (inp.to || "LIS").toUpperCase();
+      data = { roundTrip: !!inp.ret, results: [
+        { best: true, price: amt(1312), airlines: ["Air Canada"], departTime: "06:10", arriveTime: "08:55", fromCode: from, toCode: to, durationMin: 815, stops: 1, layovers: ["YYZ"], flightNumbers: ["AC 1108", "AC 1928"] },
+        { best: true, price: amt(1189), airlines: ["WestJet", "TAP Air Portugal"], departTime: "12:40", arriveTime: "10:20", fromCode: from, toCode: to, durationMin: 1000, stops: 2, layovers: ["YYC", "EWR"], flightNumbers: ["WS 112", "WS 2", "TP 202"] },
+        { best: false, price: amt(1546), airlines: ["United"], departTime: "07:05", arriveTime: "09:45", fromCode: from, toCode: to, durationMin: 820, stops: 1, layovers: ["ORD"], flightNumbers: ["UA 5432", "UA 64"] }
+      ] };
+    } else if (tab === "hotels") {
+      kind = "google";
+      data = { results: [
+        { name: `Riverside Boutique Hotel ${place}`, type: "Hotel", rating: 4.6, reviews: 1840, level: "$$$", description: "Small hotel by the water with a rooftop terrace" },
+        { name: "Old Town Guesthouse", type: "Guest house", rating: 4.4, reviews: 920, level: "$$", description: "" },
+        { name: `Grand Plaza ${place}`, type: "Hotel", rating: 4.7, reviews: 3210, level: "$$$$", description: "" },
+        { name: "Hillside Apartments", type: "Apartment rental", rating: 4.3, reviews: 410, level: "", description: "" }
+      ] };
+    } else {
+      kind = "google";
+      data = { results: [
+        { name: `${place} Old Town walking tour`, type: "Tour", rating: 4.8, reviews: 2150, rangeLo: { value: amt(25), currency: trip.currency }, rangeHi: { value: amt(40), currency: trip.currency }, level: "", description: "About 3 hours with a local guide" },
+        { name: `${place} city museum`, type: "Museum", rating: 4.6, reviews: 8800, level: "$", description: "" },
+        { name: "Riverside gardens", type: "Park", rating: 4.7, reviews: 12100, level: "Free", description: "" },
+        { name: "Central market food hall", type: "Market", rating: 4.5, reviews: 15400, level: "$$", description: "" }
+      ] };
+    }
+    finder.res[tab] = { status: "done", kind, id, data, nights, sample: true, ctx: { ...inp } };
+    render();
+  }
+
+  function addResult(key, trip) {
+    const [rid, idx] = key.split(":");
+    const tab = Object.keys(finder.res).find((t) => finder.res[t]?.id === rid);
+    if (!tab) return;
+    const r = finder.res[tab], x = r.data.results[Number(idx)], c = r.ctx || {};
+    if (!x) return;
+    const found = r.sample ? "Sample result" : `Found ${fmtDate(todayISO(), { month: "short", day: "numeric", year: "numeric" })}`;
+    let item, needsPrice = false;
+    if (tab === "flights") {
+      item = {
+        cat: "flight", title: `${x.fromCode} → ${x.toCode} · ${x.airlines.join(" / ") || "Flight"}`,
+        date: c.depart || trip.start || "", est: x.price || 0,
+        notes: [`${r.data.roundTrip ? "Round trip" : "One way"}, ${x.stops === 0 ? "nonstop" : x.stops + " stop" + (x.stops > 1 ? "s" : "")}${x.layovers.length ? " via " + x.layovers.join(", ") : ""}`,
+                `Departs ${fmtTime(x.departTime)}, arrives ${fmtTime(x.arriveTime)}`, x.flightNumbers.join(", "), found, r.sample ? "" : r.data.bookingUrl || ""].filter(Boolean).join("\n")
+      };
+    } else if (r.kind === "google") {
+      const sameCur = x.rangeLo && (!x.rangeLo.currency || x.rangeLo.currency === trip.currency);
+      const est = sameCur ? x.rangeLo.value * (tab === "activities" ? trav(trip) : 1) : 0;
+      needsPrice = !est;
+      const priceNote = x.rangeLo
+        ? `Google price range: ${money(x.rangeLo.value, x.rangeLo.currency || trip.currency)}${x.rangeHi ? "–" + money(x.rangeHi.value, x.rangeHi.currency || trip.currency) : "+"}${tab === "activities" && sameCur ? " per person" : ""}`
+        : x.level ? `Google price level: ${x.level}` : "";
+      item = {
+        cat: tab === "hotels" ? "stay" : "activity",
+        title: x.name,
+        date: tab === "hotels" ? (trip.start || "") : "",
+        est,
+        notes: [priceNote, x.address, found, r.sample ? "" : x.website || x.link].filter(Boolean).join("\n")
+      };
+    } else if (tab === "hotels") {
+      item = {
+        cat: "stay", title: `${x.name}, ${r.nights} night${r.nights === 1 ? "" : "s"}`,
+        date: c.checkin || trip.start || "", est: x.total ?? (x.perNight != null ? x.perNight * r.nights : 0),
+        notes: [x.perNight != null ? `${money(x.perNight, trip.currency)} a night` : "", found, r.sample ? "" : x.link].filter(Boolean).join("\n")
+      };
+    } else {
+      needsPrice = x.price == null;
+      item = {
+        cat: "activity", title: x.name, date: "", est: (x.price || 0) * trav(trip),
+        notes: [x.price != null ? `${money(x.price, trip.currency)} per person` : "", x.address, found, r.sample ? "" : x.link].filter(Boolean).join("\n")
+      };
+    }
+    const newItem = { id: uid(), status: "todo", actual: "", bookBy: "", ref: "", ...item };
+    trip.items.push(newItem);
+    finder.added.add(key);
+    render();
+    if (needsPrice) {
+      itemForm(newItem);
+      toast("Added. Enter your price estimate.");
+      setTimeout(() => { const el = document.getElementById("i-est"); if (el) el.focus(); }, 0);
+    } else {
+      toast("Added to bookings");
+    }
+  }
+
+  function addFlightManually(trip) {
+    const inp = finder.inputs.flights;
+    const newItem = { id: uid(), cat: "flight", title: `${(inp.from || "").toUpperCase()} → ${(inp.to || "").toUpperCase()}`, date: inp.depart || trip.start || "", status: "todo", est: "", actual: "", bookBy: "", ref: "", notes: inp.ret ? `Return ${fmtDate(inp.ret)}` : "" };
+    itemForm(newItem, true);
+  }
+
+  function helperSettings() {
+    const site = location.origin && location.origin !== "null" ? location.origin : "https://zenayefrederick.github.io";
+    openModal("Search settings", `
+      <div class="form">
+        <p class="field full" style="margin:0"><strong>Google Maps API key</strong><br><span class="hint">Finds hotels and things to do with photos, ratings and price levels. The key is saved only in this browser.</span></p>
+        <ol class="steps field full">
+          <li>In Google Cloud, enable <code>Maps JavaScript API</code> and <code>Places API (New)</code>.</li>
+          <li>Create an API key under <em>APIs &amp; Services → Credentials</em>.</li>
+          <li>Restrict it to websites: <code>${esc(site)}/*</code>, and to those two APIs.</li>
+          <li>Paste it below. Step-by-step help is in <code>GOOGLE-PLACES-SETUP.md</code>.</li>
+        </ol>
+        <div class="field full"><label for="g-key">API key</label><input id="g-key" name="gkey" value="${esc(googleKey)}" placeholder="AIza…" autocomplete="off" spellcheck="false"></div>
+        <details class="field full">
+          <summary class="hint" style="cursor:pointer">Advanced: live flight and hotel prices</summary>
+          <p class="hint" style="margin:8px 0">If you set up the price-search helper from <code>PRICE-SEARCH-SETUP.md</code>, paste its address here to get flight fares and nightly hotel rates.</p>
+          <input id="h-url" name="url" value="${esc(helperUrl)}" placeholder="https://travel-planner-helper.yourname.workers.dev" inputmode="url" autocomplete="off" style="width:100%;border:1.5px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 10px">
+        </details>
+        <p class="field full hint" id="hStatus" role="status" style="margin:0"></p>
+        <div class="modal-actions field full">
+          <button class="btn" type="button" data-action="close">Cancel</button>
+          <button class="btn btn-primary" type="button" data-save>Save</button>
+        </div>
+      </div>`, (m) => {
+      const status = m.querySelector("#hStatus");
+      const fail = (msg) => { status.textContent = msg; status.style.color = "var(--danger)"; };
+      wireSave(m, () => {
+        const k = m.querySelector("#g-key").value.trim();
+        const u = m.querySelector("#h-url").value.trim().replace(/\/+$/, "");
+        if (k && !/^[A-Za-z0-9_-]{30,60}$/.test(k)) return fail("That doesn't look like a Google API key. It usually starts with AIza and has no spaces.");
+        if (u && !/^https:\/\/[^\s/]+\.[^\s]+$/.test(u)) return fail("Enter the helper's full address, starting with https://");
+        const keyChanged = k !== googleKey;
+        helperUrl = u; googleKey = k;
+        try {
+          u ? localStorage.setItem(HELPER_KEY, u) : localStorage.removeItem(HELPER_KEY);
+          k ? localStorage.setItem(GKEY_KEY, k) : localStorage.removeItem(GKEY_KEY);
+        } catch (e) {}
+        finder.res = {};
+        closeModal();
+        // Google Maps can only be loaded once per page, so a new key needs a fresh load.
+        if (keyChanged && googleLoad) { toast("Saved. Reloading to use the new key…"); setTimeout(() => location.reload(), 800); return; }
+        googleAuthError = false;
+        render(); toast("Settings saved");
+      });
+    });
+  }
+
+  /* ---------- Modals ----------
+     Saving uses a plain click handler, not the form "submit" event, because
+     some embedded viewers block form submission entirely. */
+  function openModal(title, bodyHTML, onMount) {
+    const root = document.getElementById("modalRoot");
+    root.innerHTML = `<div class="overlay" data-overlay><div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-head"><h3>${esc(title)}</h3></div><div class="modal-body">${bodyHTML}</div></div></div>`;
+    const m = root.querySelector(".modal");
+    const first = m.querySelector("input:not([type=hidden]), select, textarea");
+    if (first) first.focus();
+    onMount && onMount(m);
+  }
+  function closeModal() { document.getElementById("modalRoot").innerHTML = ""; }
+  function wireSave(m, onSave) {
+    m.querySelector("[data-save]").addEventListener("click", onSave);
+    m.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); onSave(); }
+    });
+  }
+  function readFields(m) {
+    const out = {};
+    m.querySelectorAll("[name]").forEach((el) => { out[el.name] = el.value; });
+    return out;
+  }
+
+  function tripForm(trip) {
+    const isNew = !trip;
+    const cur0 = activeTrip()?.currency || "CAD";
+    const v = trip || { name: "", from: activeTrip()?.from || "", fromCode: activeTrip()?.fromCode || "", destination: "", toCode: "", start: "", end: "", currency: cur0, budget: "" };
+    openModal(isNew ? "New trip" : "Edit trip", `
+      <div class="form">
+        <div class="field full"><label for="f-name">Trip name</label><input id="f-name" name="name" value="${esc(v.name)}" placeholder="Summer in Japan"></div>
+        <div class="field"><label for="f-from">Flying from</label><input id="f-from" name="from" value="${esc(v.from)}" placeholder="Saskatoon"></div>
+        <div class="field"><label for="f-fromcode">Airport code</label><input id="f-fromcode" class="code-input" name="fromCode" maxlength="3" value="${esc(v.fromCode)}" placeholder="YXE"></div>
+        <div class="field"><label for="f-dest">Destination</label><input id="f-dest" name="destination" value="${esc(v.destination)}" placeholder="Tokyo, Japan"></div>
+        <div class="field"><label for="f-tocode">Airport code</label><input id="f-tocode" class="code-input" name="toCode" maxlength="3" value="${esc(v.toCode)}" placeholder="HND"></div>
+        <div class="field"><label for="f-start">Leaving</label><input id="f-start" name="start" type="date" value="${esc(v.start)}"></div>
+        <div class="field"><label for="f-end">Coming home</label><input id="f-end" name="end" type="date" value="${esc(v.end)}"></div>
+        <div class="field"><label for="f-trav">Travellers</label><input id="f-trav" name="travellers" type="number" min="1" max="9" step="1" inputmode="numeric" value="${esc(v.travellers || 1)}"></div>
+        <div class="field"><label for="f-budget">Total budget</label><input id="f-budget" name="budget" type="number" min="0" step="any" inputmode="decimal" value="${esc(v.budget)}" placeholder="3000"></div>
+        <div class="field"><label for="f-cur">Currency</label><select id="f-cur" name="currency">${[...new Set([v.currency, ...CURRENCIES])].map((c) => `<option ${c === v.currency ? "selected" : ""}>${c}</option>`).join("")}</select></div>
+        <p class="error field full" id="tripErr" role="alert" hidden></p>
+        <div class="modal-actions field full">
+          ${isNew ? "" : `<button class="btn btn-danger spacer" type="button" id="delTrip">Delete trip</button>`}
+          <button class="btn" type="button" data-action="close">Cancel</button>
+          <button class="btn btn-primary" type="button" data-save>${isNew ? "Create trip" : "Save"}</button>
+        </div>
+      </div>`, (m) => {
+      wireSave(m, () => {
+        const fd = readFields(m);
+        const err = m.querySelector("#tripErr");
+        const fail = (msg) => { err.textContent = msg; err.hidden = false; };
+        if (!fd.name.trim()) return fail("Give the trip a name.");
+        if (fd.start && fd.end && fd.end < fd.start) return fail("The return date is before the departure date.");
+        const data = {
+          name: fd.name.trim(), from: fd.from.trim(), fromCode: fd.fromCode.trim().toUpperCase(),
+          destination: fd.destination.trim(), toCode: fd.toCode.trim().toUpperCase(),
+          start: fd.start, end: fd.end, currency: fd.currency, budget: fd.budget === "" ? 0 : Number(fd.budget),
+          travellers: Math.min(9, Math.max(1, parseInt(fd.travellers, 10) || 1))
+        };
+        finder.tripId = null; // refresh search defaults from the updated trip
+        if (isNew) {
+          const nt = { id: uid(), items: [], ...data };
+          state.trips.push(nt);
+          state.activeId = nt.id;
+          filter = "all";
+          toast("Trip created. Add your first booking.");
+        } else {
+          Object.assign(trip, data);
+          toast("Trip saved");
+        }
+        closeModal(); render();
+      });
+      const del = m.querySelector("#delTrip");
+      if (del) armDelete(del, "Tap again to delete", () => {
+        state.trips = state.trips.filter((x) => x.id !== trip.id);
+        state.activeId = state.trips[0]?.id;
+        closeModal(); render(); toast("Trip deleted");
+      });
+    });
+  }
+
+  function itemForm(item, prefill) {
+    const trip = activeTrip();
+    const isNew = !item || !!prefill;
+    const v = item || { cat: "flight", title: "", date: "", status: "todo", est: "", actual: "", bookBy: "", ref: "", notes: "" };
+    openModal(isNew ? "Add item" : "Edit item", `
+      <div class="form">
+        <div class="field full"><label for="i-title">What is it?</label><input id="i-title" name="title" value="${esc(v.title)}" placeholder="Hotel in Kyoto, 3 nights"></div>
+        <div class="field"><label for="i-cat">Category</label><select id="i-cat" name="cat">${CATEGORIES.map((c) => `<option value="${c.key}" ${c.key === v.cat ? "selected" : ""}>${c.label}</option>`).join("")}</select></div>
+        <div class="field"><label for="i-status">Status</label><select id="i-status" name="status">${Object.entries(STATUS).map(([k, s]) => `<option value="${k}" ${k === v.status ? "selected" : ""}>${s}</option>`).join("")}</select></div>
+        <div class="field"><label for="i-est">Estimated cost (${esc(trip.currency)})</label><input id="i-est" name="est" type="number" min="0" step="any" inputmode="decimal" value="${esc(v.est)}"></div>
+        <div class="field"><label for="i-actual">Actual cost</label><input id="i-actual" name="actual" type="number" min="0" step="any" inputmode="decimal" value="${esc(v.actual)}" placeholder="Once booked"></div>
+        <div class="field"><label for="i-date">Date of use</label><input id="i-date" name="date" type="date" value="${esc(v.date)}"></div>
+        <div class="field"><label for="i-bookby">Book by</label><input id="i-bookby" name="bookBy" type="date" value="${esc(v.bookBy)}"></div>
+        <div class="field full"><label for="i-ref">Confirmation number</label><input id="i-ref" name="ref" value="${esc(v.ref)}" placeholder="Optional"></div>
+        <div class="field full"><label for="i-notes">Notes</label><textarea id="i-notes" name="notes" placeholder="Links, cancellation policy, who's paying">${esc(v.notes)}</textarea></div>
+        <p class="hint field full" style="margin:0">Once an item is booked or paid, its actual cost counts toward your totals. Until then, the estimate does.</p>
+        <p class="error field full" id="itemErr" role="alert" hidden></p>
+        <div class="modal-actions field full">
+          ${isNew ? "" : `<button class="btn btn-danger spacer" type="button" id="delItem">Delete</button>`}
+          <button class="btn" type="button" data-action="close">Cancel</button>
+          <button class="btn btn-primary" type="button" data-save>${isNew ? "Add item" : "Save"}</button>
+        </div>
+      </div>`, (m) => {
+      wireSave(m, () => {
+        const fd = readFields(m);
+        const err = m.querySelector("#itemErr");
+        if (!fd.title.trim()) { err.textContent = "Describe the item, for example “Flight to Toronto”."; err.hidden = false; return; }
+        const data = {
+          title: fd.title.trim(), cat: fd.cat, status: fd.status,
+          est: fd.est === "" ? 0 : Number(fd.est),
+          actual: fd.actual === "" ? "" : Number(fd.actual),
+          date: fd.date, bookBy: fd.bookBy, ref: fd.ref.trim(), notes: fd.notes.trim()
+        };
+        if (isNew) { trip.items.push({ id: (prefill && item.id) || uid(), ...data }); toast("Item added"); }
+        else { Object.assign(item, data); toast("Item saved"); }
+        closeModal(); render();
+      });
+      const del = m.querySelector("#delItem");
+      if (del) armDelete(del, "Tap again to delete", () => {
+        trip.items = trip.items.filter((x) => x.id !== item.id);
+        closeModal(); render(); toast("Item deleted");
+      });
+    });
+  }
+
+  // Two-step delete: first tap arms, second tap within 4s deletes.
+  function armDelete(btn, armedText, onConfirm) {
+    const original = btn.textContent;
+    let armed = false, timer;
+    btn.addEventListener("click", () => {
+      if (armed) { clearTimeout(timer); onConfirm(); return; }
+      armed = true; btn.textContent = armedText; btn.classList.add("btn-primary");
+      timer = setTimeout(() => { armed = false; btn.textContent = original; btn.classList.remove("btn-primary"); }, 4000);
+    });
+  }
+
+  /* ---------- Data import/export ---------- */
+  function exportJSON() {
+    const json = JSON.stringify(state, null, 2);
+    try {
+      const blob = new Blob([json], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `travel-planner-backup-${todayISO()}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      toast("Backup downloaded");
+    } catch (e) { toast("Download isn't available here. Use Copy as text."); }
+  }
+  function copyJSON() {
+    const json = JSON.stringify(state, null, 2);
+    const fallback = () => {
+      openModal("Your data", `<p class="hint" style="margin:0 0 10px">Select all and copy this text. Save it somewhere safe.</p><textarea id="copyArea" style="width:100%;min-height:240px;font-family:var(--font-mono);font-size:.8rem;border:1.5px solid var(--line);background:var(--bg);border-radius:10px;padding:8px" readonly>${esc(json)}</textarea><div class="modal-actions" style="margin-top:12px"><button class="btn btn-primary" type="button" data-action="close">Done</button></div>`, (m) => { const ta = m.querySelector("#copyArea"); ta.focus(); ta.select(); });
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(json).then(() => toast("Copied to clipboard"), fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+  function importFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const s = JSON.parse(reader.result);
+        if (!s || !Array.isArray(s.trips)) throw new Error("bad");
+        // Merge by trip, so importing never deletes trips you already have.
+        s.trips.forEach((t) => {
+          if (!t || !t.id) return;
+          const i = state.trips.findIndex((x) => x.id === t.id);
+          if (i >= 0) state.trips[i] = t; else state.trips.push(t);
+        });
+        state.activeId = s.trips[0]?.id || state.activeId;
+        filter = "all"; render(); toast(`Imported ${s.trips.length} trip${s.trips.length === 1 ? "" : "s"}`);
+      } catch (e) { toast("That file isn't a Travel Planner backup."); }
+    };
+    reader.readAsText(file);
+  }
+
+  /* ---------- Events ---------- */
+  document.addEventListener("click", (e) => {
+    const overlay = e.target.closest("[data-overlay]");
+    if (overlay && e.target === overlay) { closeModal(); return; }
+    const f = e.target.closest("[data-filter]");
+    if (f) { filter = f.dataset.filter; render(); return; }
+    const tb = e.target.closest("[data-tab]");
+    if (tb) { finder.tab = tb.dataset.tab; render(); return; }
+    const el = e.target.closest("[data-action]");
+    if (!el) return;
+    const trip = activeTrip();
+    const id = el.dataset.id;
+    switch (el.dataset.action) {
+      case "close": closeModal(); break;
+      case "new-trip": tripForm(); break;
+      case "edit-trip": tripForm(trip); break;
+      case "add-item": itemForm(); break;
+      case "edit-item": itemForm(trip.items.find((x) => x.id === id)); break;
+      case "cycle": {
+        const it = trip.items.find((x) => x.id === id);
+        if (!it || it.status === "spend") break;
+        it.status = { todo: "booked", booked: "paid", paid: "todo" }[it.status];
+        render(); toast(`Marked ${STATUS[it.status].toLowerCase()}`);
+        break;
+      }
+      case "clear-example":
+        state.trips = state.trips.filter((x) => !x.example);
+        state.activeId = state.trips[0]?.id;
+        render(); if (!state.trips.length) tripForm();
+        break;
+      case "helper-settings": helperSettings(); break;
+      case "search": runSearch(trip); break;
+      case "sample-search": sampleSearch(trip); break;
+      case "add-result": addResult(el.dataset.key, trip); break;
+      case "add-flight": addFlightManually(trip); break;
+      case "export": exportJSON(); break;
+      case "copy": copyJSON(); break;
+    }
+  });
+  document.getElementById("newTripBtn").addEventListener("click", () => tripForm());
+  document.getElementById("syncBtn").addEventListener("click", () => syncDialog());
+  document.getElementById("tripSelect").addEventListener("change", (e) => { state.activeId = e.target.value; filter = "all"; render(); });
+  // Keep what's typed in the search controls across re-renders.
+  const onFinderInput = (e) => {
+    const k = e.target.dataset && e.target.dataset.finder;
+    if (k && finder.inputs[finder.tab]) finder.inputs[finder.tab][k] = e.target.value;
+    if (k && finder.tab === "flights") {
+      const t = activeTrip();
+      document.querySelectorAll('a[href^="https://www.google.com/travel/flights"]').forEach((a) => { if (t && !a.closest(".results-note")) a.href = flightsUrl(finder.inputs.flights, t); });
+    }
+  };
+  document.addEventListener("input", onFinderInput);
+  document.addEventListener("change", onFinderInput);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.dataset && e.target.dataset.finder) {
+      e.preventDefault();
+      const t = activeTrip();
+      if (!t) return;
+      const src = sourceFor(finder.tab);
+      if (src === "link") { const a = document.getElementById("gfLink"); if (a) a.click(); }
+      else if (src === "none") sampleSearch(t);
+      else runSearch(t);
+    }
+  });
+  document.addEventListener("change", (e) => {
+    if (e.target.id === "importFile" && e.target.files[0]) { importFile(e.target.files[0]); e.target.value = ""; }
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+  /* ---------- Night-sky stars in the header ---------- */
+  function drawStars() {
+    const c = document.getElementById("stars");
+    if (!c) return;
+    const r = c.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    c.width = Math.max(1, r.width * dpr); c.height = Math.max(1, r.height * dpr);
+    const ctx = c.getContext("2d");
+    ctx.scale(dpr, dpr);
+    let seed = 7;
+    const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const n = Math.round(r.width / 9);
+    for (let i = 0; i < n; i++) {
+      const x = rand() * r.width, y = rand() * r.height * 0.55;
+      ctx.globalAlpha = 0.25 + rand() * 0.6;
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.arc(x, y, rand() * 1.2 + 0.3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  drawStars();
+  let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(drawStars, 150); });
+
+  render();
+  initCloud();
+})();
+</script>
+
+</body>
+</html>
